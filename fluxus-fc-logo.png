@@ -1,0 +1,10 @@
+# PLACEHOLDER FILE
+# This is a placeholder for the Fluxus FC logo.
+# 
+# To get the actual logo:
+# 1. Create or obtain a PNG logo file for Fluxus FC
+# 2. Replace this file with the actual fluxus-fc-logo.png file
+# 3. Recommended size: 28px height (width will scale proportionally)
+# 4. The logo appears in the header of the app
+#
+# The app will hide the logo if this file is missing or fails to load.
