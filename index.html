@@ -76,14 +76,14 @@
             <input id="fileInput" type="file" accept="image/*" />
             <button id="addDecalBtn">Add</button>
           </div>
-          <p class="small">Tip: tap shirt to place; pinch to scale; two-finger rotate. Use buttons on a selected image to resize/flip/rotate.</p>
+          <p class="small">Tip: drag image onto shirt to place it. Click and drag existing decals to move them.</p>
         </div>
 
         <div class="section" id="nftSection">
           <h3 style="display:flex;align-items:center;justify-content:space-between">NFTs in wallet <span id="walletStatus" class="small" style="font-weight:500;">Not connected</span></h3>
           <div class="collapsible" id="nftCollapse">
             <div id="nftGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;max-height:300px;overflow-y:auto;padding-right:4px"></div>
-            <p class="small" style="margin-top:8px">Drag a thumbnail onto the shirt to place it.</p>
+            <p class="small" style="margin-top:8px">Drag a thumbnail onto the shirt to place it. Click and drag existing decals to move them.</p>
           </div>
         </div>
 
@@ -94,7 +94,7 @@
 
 </div>
 
-<div class="hint" id="hint">Tap shirt to place, drag to move, scroll/pinch to scale, hold Alt to rotate.</div>
+<div class="hint" id="hint">Drag images onto shirt to place them. Click and drag existing decals to move them.</div>
 
     <script type="importmap">
       {
@@ -347,26 +347,33 @@
   const decals = [];
   const controlRingGeom = new THREE.RingGeometry(0.36, 0.38, 48);
   const controlRingMat = new THREE.MeshBasicMaterial({ color: 0x66ccff, transparent:true, opacity:0.5, depthTest:false });
-  const controlRing = new THREE.Mesh(controlRingGeom, controlRingMat); controlRing.visible=false; controlRing.renderOrder=3; scene.add(controlRing);
+  const controlRing = new THREE.Mesh(controlRingGeom, controlRingMat); 
+  controlRing.visible=false; // Always hidden - no manual controls
+  controlRing.renderOrder=3; 
+  scene.add(controlRing);
 
   // Create a composite texture that combines base material with decals
   function createCompositeTexture(baseTexture, decalTextures = []) {
     const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
+    canvas.width = 1024; // Increased resolution for better quality
+    canvas.height = 1024;
     const ctx = canvas.getContext('2d');
+    
+    // Enable high-quality image rendering
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     
     // Fill with white background (shirt base)
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, 512, 512);
+    ctx.fillRect(0, 0, 1024, 1024);
     
     // Add grid if enabled
     if (isGridOn) {
       console.log('createCompositeTexture: Drawing grid');
       ctx.strokeStyle = '#66ccff'; // Light blue grid lines
-      ctx.lineWidth = 1.0; // Medium lines
+      ctx.lineWidth = 2.0; // Slightly thicker lines for higher resolution
       ctx.globalAlpha = 0.6; // 60% opacity - visible but not overwhelming
-      const gridSize = 16; // 32x32 grid (smaller squares)
+      const gridSize = 32; // 32x32 grid (adjusted for 1024x1024 canvas)
       
       // Draw grid as squares, not just lines
       for (let x = 0; x < 32; x++) {
@@ -386,12 +393,14 @@
     }
     
     // Add decals
-    decalTextures.forEach(decal => {
+    decalTextures.forEach((decal, index) => {
       if (decal.texture && decal.texture.image) {
         const img = decal.texture.image;
-        const size = Math.min(512 * decal.scale, 200); // Max 200px
-        const x = (decal.position.x + 1) * 256 - size/2; // Convert from -1,1 to 0,512
-        const y = (decal.position.y + 1) * 256 - size/2;
+        const size = Math.min(1024 * decal.scale, 400); // Max 400px for higher resolution
+        const x = (decal.position.x + 1) * 512 - size/2; // Convert from -1,1 to 0,1024
+        const y = (decal.position.y + 1) * 512 - size/2;
+        
+        console.log(`Drawing decal ${index}: pos=(${decal.position.x.toFixed(2)}, ${decal.position.y.toFixed(2)}), size=${size.toFixed(0)}, canvas_pos=(${x.toFixed(0)}, ${y.toFixed(0)})`);
         
         ctx.save();
         ctx.translate(x + size/2, y + size/2);
@@ -402,11 +411,23 @@
     });
     
     console.log('createCompositeTexture: Created texture with', decalTextures.length, 'decals');
-    return new THREE.CanvasTexture(canvas);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4; // Higher anisotropy for better quality
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    return texture;
   }
 
   function makeDecal(tex){
-    tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 2; tex.flipY = false;
+    tex.colorSpace = THREE.SRGBColorSpace; 
+    tex.anisotropy = 4; // Higher anisotropy for better quality
+    tex.flipY = false;
+    tex.generateMipmaps = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    
     const decal = {
       texture: tex,
       name: tex.image?.name || 'decal',
@@ -421,6 +442,15 @@
 
   function updateShirtTexture() {
     if (!shirtMesh) return;
+    
+    // Create composite texture with decals
+    const compositeTexture = createCompositeTexture(null, decals);
+    
+    // Create new material with the composite texture
+    const compositeMaterial = new THREE.MeshLambertMaterial({ 
+      color: 0xffffff,
+      map: compositeTexture
+    });
     
     // Use the same mesh analysis logic as during shirt loading
     const meshInfo = [];
@@ -443,14 +473,15 @@
     
     let appliedCount = 0;
     meshInfo.forEach((info, index) => {
-      // Apply grid to main shirt body parts, exclude only collar and insides
+      // Apply composite material to main shirt body parts, exclude only collar and insides
       const isCollar = info.center.y > 3.8; // Very high Y positions are collar
       const isInside = info.center.y < 3.1; // Very low Y positions are insides
       
       if (!isCollar && !isInside) {
-        info.mesh.material = isGridOn ? gridShirtMat : plainShirtMat;
+        // Apply composite material (includes grid + decals) to main shirt parts
+        info.mesh.material = compositeMaterial;
         appliedCount++;
-        console.log(`Applied ${isGridOn ? 'grid' : 'plain'} material to: ${info.name} (Y: ${info.center.y.toFixed(2)})`);
+        console.log(`Applied composite material to: ${info.name} (Y: ${info.center.y.toFixed(2)})`);
       } else {
         // Apply plain white material to excluded parts (collar and insides)
         info.mesh.material = plainShirtMat;
@@ -458,7 +489,7 @@
       }
     });
     
-    console.log('updateShirtTexture: Applied material to', appliedCount, 'meshes');
+    console.log('updateShirtTexture: Applied composite material to', appliedCount, 'meshes with', decals.length, 'decals');
   }
 
   function placeAt(x,y){
@@ -470,15 +501,21 @@
     if(hit){
       const a = active();
       if(a){
-        // Convert 3D position to UV coordinates (simplified mapping)
+        // Convert 3D position to UV coordinates (improved mapping)
         const pos = hit.point;
-        a.position.x = Math.max(-1, Math.min(1, pos.x / 2)); // Rough mapping to -1,1 range
-        a.position.y = Math.max(-1, Math.min(1, pos.y / 2));
+        // Better mapping that accounts for shirt center and size
+        const relativeX = (pos.x - shirtCenter.x) / 1.5; // Normalize around shirt center
+        const relativeY = (pos.y - shirtCenter.y) / 1.5;
+        
+        a.position.x = Math.max(-1, Math.min(1, relativeX));
+        a.position.y = Math.max(-1, Math.min(1, relativeY));
         updateShirtTexture();
         
         // Position control ring at decal position in 3D space
         const ringPos = new THREE.Vector3(a.position.x * 2, a.position.y * 2, 0);
         controlRing.position.copy(ringPos);
+        
+        console.log(`Placed decal at 3D: (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}) -> UV: (${a.position.x.toFixed(2)}, ${a.position.y.toFixed(2)})`);
       }
     }
   }
@@ -488,73 +525,140 @@
   function selectLayer(i){ 
     activeIndex=i; 
     const a=active(); 
-    if(a){ 
-      controlRing.visible=true; 
-      // Position control ring at decal position in 3D space
-      const ringPos = new THREE.Vector3(a.position.x * 2, a.position.y * 2, 0);
-      controlRing.position.copy(ringPos);
-      controlRing.scale.setScalar(a.scale * 2);
-    } else { 
-      controlRing.visible=false; 
-    } 
+    // Always keep control ring hidden - no manual controls
+    controlRing.visible=false; 
   }
 
 
-  // Pointer/touch controls
-  let dragging=false; let lastDist=0; let lastAngle=0; 
-  renderer.domElement.addEventListener('pointerdown', (e)=>{ dragging=true; placeAt(e.offsetX,e.offsetY); });
+  // Pointer/touch controls - drag & drop movement for existing decals, no click-to-move
+  let dragging=false; let lastDist=0; let lastAngle=0; let dragStarted=false; let mouseDown=false;
+  renderer.domElement.addEventListener('pointerdown', (e)=>{ 
+    mouseDown = true;
+    dragStarted = false;
+    dragging = false;
+  });
   renderer.domElement.addEventListener('pointermove', (e)=>{ 
-    if(dragging){ 
+    // Only start dragging if we have decals, mouse button is pressed, and we've moved enough
+    if(decals.length > 0 && mouseDown && e.buttons > 0 && !dragStarted) {
+      // Check if we're moving over a decal area (rough check based on mouse position)
+      const rect = renderer.domElement.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      // Convert to normalized device coordinates
+      mouse.x = (mouseX / rect.width) * 2 - 1;
+      mouse.y = -(mouseY / rect.height) * 2 + 1;
+      
+      // Raycast to see if we're over the shirt
+      raycaster.setFromCamera(mouse, camera);
+      const hit = raycaster.intersectObject(shirtMesh, true)[0];
+      
+      if(hit) {
+        // Check if we're actually over an existing decal by checking if we're near any decal position
+        let closestDecal = null;
+        let closestDistance = Infinity;
+        
+        // Find the closest decal to the hit point
+        for(let i = 0; i < decals.length; i++) {
+          const decal = decals[i];
+          const decalUV = new THREE.Vector2(decal.position.x, decal.position.y);
+          // Convert hit UV from 0-1 range to -1 to 1 range to match decal coordinates
+          const hitUV = new THREE.Vector2(hit.uv.x * 2 - 1, hit.uv.y * 2 - 1);
+          const distance = decalUV.distanceTo(hitUV);
+          
+          console.log(`Decal ${i}: pos=(${decal.position.x.toFixed(2)}, ${decal.position.y.toFixed(2)}), hit=(${hitUV.x.toFixed(2)}, ${hitUV.y.toFixed(2)}), distance=${distance.toFixed(3)}`);
+          
+          if(distance < closestDistance) {
+            closestDistance = distance;
+            closestDecal = decal;
+          }
+        }
+        
+        // Only start dragging if we're close to a decal (within a reasonable distance)
+        if(closestDecal && closestDistance < 0.2) { // Increased distance for easier dragging
+          // Select the closest decal
+          activeIndex = decals.indexOf(closestDecal);
+          dragStarted = true;
+          dragging = true;
+          
+          console.log(`Starting drag for decal ${activeIndex}, distance: ${closestDistance.toFixed(3)}`);
+          
+          // Disable camera controls when actually dragging
+          if(controls) {
+            controls.enabled = false;
+          }
+        }
+      }
+    }
+    
+    if(dragging && active()){ 
       placeAt(e.offsetX,e.offsetY); 
       const a=active(); 
       if(a){ 
+        // Keep control ring hidden but update position for visual feedback
         const ringPos = new THREE.Vector3(a.position.x * 2, a.position.y * 2, 0);
         controlRing.position.copy(ringPos);
         controlRing.scale.setScalar(a.scale * 2);
       } 
-    } 
-  });
-  renderer.domElement.addEventListener('pointerup', ()=> dragging=false);
-  renderer.domElement.addEventListener('wheel', (e)=>{ 
-    const a=active(); 
-    if(!a) return; 
-    const s=a.scale * (e.deltaY<0 ? 1.05 : 0.95); 
-    a.scale = Math.max(0.1, Math.min(1.0, s));
-    updateShirtTexture();
-    controlRing.scale.setScalar(a.scale * 2);
-  });
-
-  renderer.domElement.addEventListener('touchmove', (e)=>{
-    if(e.touches.length===2){ 
-      e.preventDefault(); 
-      const a=active(); 
-      if(!a) return; 
-      const [t0,t1]=[e.touches[0], e.touches[1]]; 
-      const dx=t0.clientX-t1.clientX, dy=t0.clientY-t1.clientY; 
-      const dist=Math.hypot(dx,dy); 
-      const angle=Math.atan2(dy,dx); 
-      if(lastDist){ 
-        const scale=dist/lastDist; 
-        const s=a.scale*scale; 
-        a.scale = Math.max(0.1, Math.min(1.0, s));
-        updateShirtTexture();
-        controlRing.scale.setScalar(a.scale * 2);
-      } 
-      if(lastAngle){ 
-        const da=angle-lastAngle; 
-        a.rotation += da; 
-        updateShirtTexture();
-      } 
-      lastDist=dist; 
-      lastAngle=angle; 
     }
-  }, {passive:false});
-  renderer.domElement.addEventListener('touchend', ()=>{ lastDist=0; lastAngle=0; });
+    
+    // If we're not dragging a decal, make sure camera controls are enabled
+    if(!dragging && controls) {
+      controls.enabled = true;
+    }
+  });
+  renderer.domElement.addEventListener('pointerup', (e)=>{ 
+    mouseDown = false;
+    dragging=false; 
+    dragStarted = false;
+    // Re-enable camera controls when done dragging
+    if(controls) {
+      controls.enabled = true;
+    }
+  });
+  // Disable wheel scaling - only drag & drop for placement
+  // renderer.domElement.addEventListener('wheel', (e)=>{ 
+  //   const a=active(); 
+  //   if(!a) return; 
+  //   const s=a.scale * (e.deltaY<0 ? 1.05 : 0.95); 
+  //   a.scale = Math.max(0.1, Math.min(1.0, s));
+  //   updateShirtTexture();
+  //   controlRing.scale.setScalar(a.scale * 2);
+  // });
+
+  // Disable touch controls - only drag & drop for placement
+  // renderer.domElement.addEventListener('touchmove', (e)=>{
+  //   if(e.touches.length===2){ 
+  //     e.preventDefault(); 
+  //     const a=active(); 
+  //     if(!a) return; 
+  //     const [t0,t1]=[e.touches[0], e.touches[1]]; 
+  //     const dx=t0.clientX-t1.clientX, dy=t0.clientY-t1.clientY; 
+  //     const dist=Math.hypot(dx,dy); 
+  //     const angle=Math.atan2(dy,dx); 
+  //     if(lastDist){ 
+  //       const scale=dist/lastDist; 
+  //       const s=a.scale*scale; 
+  //       a.scale = Math.max(0.1, Math.min(1.0, s));
+  //       updateShirtTexture();
+  //       controlRing.scale.setScalar(a.scale * 2);
+  //     } 
+  //     if(lastAngle){ 
+  //       const da=angle-lastAngle; 
+  //       a.rotation += da; 
+  //       updateShirtTexture();
+  //     } 
+  //     lastDist=dist; 
+  //     lastAngle=angle; 
+  //   }
+  // }, {passive:false});
+  // renderer.domElement.addEventListener('touchend', ()=>{ lastDist=0; lastAngle=0; });
 
   // UI
   document.getElementById('resetBtn').onclick = ()=>{ 
     decals.length=0; 
     controlRing.visible=false; 
+    activeIndex = -1;
     updateShirtTexture();
   };
   document.getElementById('toggleGrid').onclick = ()=>{ 
