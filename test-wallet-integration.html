@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fluxus Wallet Integration Test</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #0a0a0a;
+            color: #ffffff;
+        }
+        .test-section {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background: #1a4d1a; border: 1px solid #2d7d2d; }
+        .error { background: #4d1a1a; border: 1px solid #7d2d2d; }
+        .info { background: #1a1a4d; border: 1px solid #2d2d7d; }
+        button {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #444; }
+        button:disabled { background: #222; color: #666; cursor: not-allowed; }
+        .log {
+            background: #000;
+            border: 1px solid #333;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Fluxus Wallet Integration Test</h1>
+    
+    <div class="test-section">
+        <h2>1. Beacon SDK Loading Test</h2>
+        <button id="testBeaconLoad">Test Beacon SDK Load</button>
+        <div id="beaconResult" class="test-result info">Click button to test Beacon SDK loading...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Wallet Connection Test</h2>
+        <button id="testWalletConnect">Test Wallet Connection</button>
+        <div id="walletResult" class="test-result info">Click button to test wallet connection...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. NFT Fetching Test</h2>
+        <input type="text" id="testAddress" placeholder="Enter Tezos address (tz1...)" style="width: 300px; padding: 8px; background: #222; color: white; border: 1px solid #555; border-radius: 4px;">
+        <button id="testNFTFetch">Test NFT Fetch</button>
+        <div id="nftResult" class="test-result info">Enter address and click button to test NFT fetching...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. TZKT API Test</h2>
+        <button id="testTZKT">Test TZKT API</button>
+        <div id="tzktResult" class="test-result info">Click button to test TZKT API connectivity...</div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. Test Log</h2>
+        <div id="testLog" class="log">Test log will appear here...\n</div>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <script>
+        let log = document.getElementById('testLog');
+        
+        function addLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            log.textContent += `[${timestamp}] ${message}\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function clearLog() {
+            log.textContent = 'Test log cleared...\n';
+        }
+
+        function setResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `test-result ${type}`;
+        }
+
+        // Test 1: Beacon SDK Loading
+        document.getElementById('testBeaconLoad').onclick = async () => {
+            addLog('Testing Beacon SDK loading...');
+            setResult('beaconResult', 'Loading Beacon SDK...', 'info');
+            
+            try {
+                let DAppClient = null;
+                let method = '';
+                
+                try {
+                    // Method 1: Try the main beacon-sdk package
+                    const mod = await import('https://unpkg.com/@airgap/beacon-sdk@4.0.9/dist/walletbeacon.min.js');
+                    addLog('Method 1: walletbeacon.min.js loaded');
+                    addLog('Available exports: ' + Object.keys(mod).join(', '));
+                    DAppClient = mod.DAppClient || mod.default?.DAppClient || mod.beacon?.DAppClient;
+                    method = 'Method 1 (walletbeacon.min.js)';
+                } catch (e1) {
+                    addLog('Method 1 failed: ' + e1.message);
+                    try {
+                        // Method 2: Try the core package
+                        const mod2 = await import('https://unpkg.com/@airgap/beacon-sdk@4.0.9/dist/index.js');
+                        addLog('Method 2: index.js loaded');
+                        addLog('Available exports: ' + Object.keys(mod2).join(', '));
+                        DAppClient = mod2.DAppClient || mod2.default?.DAppClient;
+                        method = 'Method 2 (index.js)';
+                    } catch (e2) {
+                        addLog('Method 2 failed: ' + e2.message);
+                        // Method 3: Try direct script loading
+                        const script = document.createElement('script');
+                        script.src = 'https://unpkg.com/@airgap/beacon-sdk@4.0.9/dist/walletbeacon.min.js';
+                        document.head.appendChild(script);
+                        await new Promise((resolve, reject) => {
+                            script.onload = resolve;
+                            script.onerror = reject;
+                        });
+                        DAppClient = window.beacon?.DAppClient || window.DAppClient;
+                        method = 'Method 3 (script tag)';
+                        addLog('Method 3: script tag loaded');
+                    }
+                }
+                
+                if (DAppClient) {
+                    addLog('DAppClient found via ' + method + ': ' + typeof DAppClient);
+                    setResult('beaconResult', '✅ Beacon SDK loaded successfully via ' + method + '! DAppClient available.', 'success');
+                } else {
+                    addLog('DAppClient not found in any method');
+                    setResult('beaconResult', '❌ DAppClient not found in any import method', 'error');
+                }
+            } catch (error) {
+                addLog('All Beacon SDK loading methods failed: ' + error.message);
+                setResult('beaconResult', '❌ Beacon SDK loading failed: ' + error.message, 'error');
+            }
+        };
+
+        // Test 2: Wallet Connection
+        document.getElementById('testWalletConnect').onclick = async () => {
+            addLog('Testing wallet connection...');
+            setResult('walletResult', 'Attempting wallet connection...', 'info');
+            
+            try {
+                // Try different Beacon SDK import methods (same as main app)
+                let DAppClient = null;
+                
+                try {
+                    const mod = await import('https://unpkg.com/@airgap/beacon-sdk@4.0.9/dist/walletbeacon.min.js');
+                    DAppClient = mod.DAppClient || mod.default?.DAppClient || mod.beacon?.DAppClient;
+                } catch (e1) {
+                    try {
+                        const mod2 = await import('https://unpkg.com/@airgap/beacon-sdk@4.0.9/dist/index.js');
+                        DAppClient = mod2.DAppClient || mod2.default?.DAppClient;
+                    } catch (e2) {
+                        const script = document.createElement('script');
+                        script.src = 'https://unpkg.com/@airgap/beacon-sdk@4.0.9/dist/walletbeacon.min.js';
+                        document.head.appendChild(script);
+                        await new Promise((resolve, reject) => {
+                            script.onload = resolve;
+                            script.onerror = reject;
+                        });
+                        DAppClient = window.beacon?.DAppClient || window.DAppClient;
+                    }
+                }
+                
+                if (!DAppClient) {
+                    throw new Error('DAppClient not available in any import method');
+                }
+                
+                addLog('DAppClient found: ' + typeof DAppClient);
+                const bc = new DAppClient({ name: 'Fluxus FC Test' });
+                addLog('DAppClient initialized');
+                
+                const perms = await bc.requestPermissions({ network: { type: 'mainnet' } });
+                addLog('Wallet permissions granted');
+                addLog('Wallet address: ' + perms.address);
+                
+                setResult('walletResult', `✅ Wallet connected! Address: ${perms.address}`, 'success');
+            } catch (error) {
+                addLog('Wallet connection failed: ' + error.message);
+                setResult('walletResult', '❌ Wallet connection failed: ' + error.message, 'error');
+            }
+        };
+
+        // Test 3: NFT Fetching
+        document.getElementById('testNFTFetch').onclick = async () => {
+            const address = document.getElementById('testAddress').value.trim();
+            if (!address) {
+                setResult('nftResult', 'Please enter a Tezos address', 'error');
+                return;
+            }
+            
+            addLog('Testing NFT fetching for address: ' + address);
+            setResult('nftResult', 'Fetching NFTs...', 'info');
+            
+            try {
+                const url = `https://api.tzkt.io/v1/tokens/balances?account=${address}&token.standard=fa2&balance.ne=0&limit=10&select=token.metadata`;
+                addLog('Fetching from: ' + url);
+                
+                const res = await fetch(url);
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+                
+                const data = await res.json();
+                addLog('TZKT API response received: ' + data.length + ' tokens');
+                
+                const pics = [];
+                for (const m of data) {
+                    const a = m?.artifactUri || m?.displayUri || m?.thumbnailUri;
+                    if (a) {
+                        pics.push({ src: a, name: m?.name || 'NFT' });
+                    }
+                }
+                
+                addLog('Processed ' + pics.length + ' NFTs with images');
+                setResult('nftResult', `✅ Found ${pics.length} NFTs with images`, 'success');
+                
+            } catch (error) {
+                addLog('NFT fetching failed: ' + error.message);
+                setResult('nftResult', '❌ NFT fetching failed: ' + error.message, 'error');
+            }
+        };
+
+        // Test 4: TZKT API Test
+        document.getElementById('testTZKT').onclick = async () => {
+            addLog('Testing TZKT API connectivity...');
+            setResult('tzktResult', 'Testing TZKT API...', 'info');
+            
+            try {
+                // Test with a known address that has NFTs
+                const testAddress = 'tz1KqTpEZ7Yob7QbPE4Hy4Wo8fHG8LhKxZSx'; // objkt.com address
+                const url = `https://api.tzkt.io/v1/tokens/balances?account=${testAddress}&token.standard=fa2&balance.ne=0&limit=5&select=token.metadata`;
+                
+                const res = await fetch(url);
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+                
+                const data = await res.json();
+                addLog('TZKT API test successful: ' + data.length + ' tokens found');
+                setResult('tzktResult', `✅ TZKT API working! Found ${data.length} tokens for test address`, 'success');
+                
+            } catch (error) {
+                addLog('TZKT API test failed: ' + error.message);
+                setResult('tzktResult', '❌ TZKT API test failed: ' + error.message, 'error');
+            }
+        };
+
+        // Initialize
+        addLog('Wallet integration test page loaded');
+        addLog('Ready to test Beacon SDK and wallet functionality');
+    </script>
+</body>
+</html>
