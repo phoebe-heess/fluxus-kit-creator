@@ -1,0 +1,1055 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Fluxus FC — Kit Creator</title>
+  <style>
+    :root{ --bg:#000000; --panel:#1a1a1a; --muted:#666666; --accent:#ffffff; --text:#ffffff; --danger:#ff0000; }
+    html,body{height:100%}
+    body{margin:0;background:#000000;color:var(--text);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Inter,"Helvetica Neue",Arial,Noto Sans,"Apple Color Emoji","Segoe UI Emoji"}
+    .app{position:fixed;inset:0;display:grid;grid-template-rows:auto 1fr}
+    header{display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;border-bottom:1px solid #333333;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,0));backdrop-filter:saturate(140%) blur(6px)}
+    header img{height:28px;width:auto}
+    header h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.3px}
+    header .grow{flex:1}
+    header .btn{background:#1a1a1a;border:1px solid #333333;color:var(--text);padding:.5rem .75rem;border-radius:6px;cursor:pointer;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,"Helvetica Neue",Arial,Noto Sans}
+    header .btn[disabled]{opacity:.6;cursor:not-allowed}
+
+    .layout{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:1fr auto}
+    @media (min-width:900px){.layout{grid-template-columns:1fr 340px;grid-template-rows:1fr}}
+
+    #stage{position:relative;background:transparent}
+    canvas{display:block;width:100%;height:100%}
+
+    aside{border-left:1px solid #333333;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,0))}
+    .panel{padding:12px 12px 80px;height:100%;overflow:auto}
+    .section{margin:12px 0;padding:12px;background:var(--panel);border:1px solid #333333;border-radius:8px}
+    .section h3{margin:0 0 .5rem 0;font-size:13px;letter-spacing:.3px;color:#cccccc;text-transform:uppercase;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,"Helvetica Neue",Arial,Noto Sans}
+    .row{display:flex;align-items:center;gap:.5rem;margin:.5rem 0}
+    .row input[type="range"]{flex:1}
+    .row input[type="file"]{flex:1}
+    .layers{display:flex;flex-direction:column;gap:.5rem}
+    .layer{display:flex;gap:.5rem;align-items:center;background:#1a1a1a;border:1px solid #333333;border-radius:6px;padding:.5rem}
+    .layer button{border:1px solid #333333;background:#1a1a1a;color:var(--text);padding:.4rem .5rem;border-radius:4px;cursor:pointer;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,"Helvetica Neue",Arial,Noto Sans}
+    .layer .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#cccccc}
+    .small{font-size:12px;color:#999999;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,"Helvetica Neue",Arial,Noto Sans}
+    .footer{position:fixed;right:12px;bottom:12px;display:flex;gap:.5rem}
+    .fab{background:var(--accent);color:#000000;border:none;border-radius:6px;padding:.8rem 1rem;font-weight:600;cursor:pointer;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,"Helvetica Neue",Arial,Noto Sans}
+    .ghost{background:transparent;color:var(--text);border:1px solid #333333;border-radius:6px;padding:.8rem 1rem;font-weight:600;cursor:pointer;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,"Helvetica Neue",Arial,Noto Sans}
+
+    .hint{position:absolute;left:12px;bottom:12px;padding:.45rem .6rem;background:#1a1a1a;border:1px solid #333333;border-radius:6px;color:#cccccc;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,"Helvetica Neue",Arial,Noto Sans}
+
+    /* collapsible section for mobile */
+    .collapsible{max-height:0;overflow:hidden;transition:max-height .25s ease}
+    .collapsible.open{max-height:800px}
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <img src="./fluxus-fc-logo.png" alt="Fluxus FC" onerror="this.style.display='none'" />
+    <h1>Fluxus FC — Kit Creator</h1>
+    <div class="grow"></div>
+    <button class="btn" id="artworksBtn" title="Shows your NFTs">Login</button>
+    <button class="btn" id="resetBtn" title="Reset all">Reset</button>
+  </header>
+
+  <div class="layout">
+    <div id="stage"></div>
+
+    <aside>
+      <div class="panel">
+        <div class="section">
+          <h3>Tools</h3>
+          <div class="row">
+            <button id="toggleGrid" class="btn">Grid</button>
+            <button id="connectWallet" class="btn">Connect Wallet</button>
+            <button id="mintBtn" class="btn" title="Coming soon" disabled>Mint</button>
+          </div>
+          <p class="small">Grid helps symmetry. Wallet shows your NFTs to drag onto the shirt.</p>
+        </div>
+
+        <div class="section">
+          <h3>Upload image</h3>
+          <div class="row">
+            <input id="fileInput" type="file" accept="image/*" />
+            <button id="addDecalBtn">Add</button>
+          </div>
+          <p class="small">Tip: drag image onto shirt to place it. Click and drag existing decals to move them.</p>
+        </div>
+
+        <div class="section" id="nftSection">
+          <h3 style="display:flex;align-items:center;justify-content:space-between">NFTs in wallet <span id="walletStatus" class="small" style="font-weight:500;">Not connected</span></h3>
+          <div class="collapsible" id="nftCollapse">
+            <div id="nftGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px;max-height:300px;overflow-y:auto;padding-right:4px"></div>
+            <p class="small" style="margin-top:8px">Drag a thumbnail onto the shirt to place it. Click and drag existing decals to move them.</p>
+          </div>
+        </div>
+
+
+      </div>
+    </aside>
+  </div>
+
+</div>
+
+<div class="hint" id="hint">Drag images onto shirt to place them. Click and drag existing decals to move them.</div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+    <script type="module">
+      import * as THREE from 'three';
+      import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+      import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+      
+      // Make them globally available
+      window.THREE = THREE;
+      window.OrbitControls = OrbitControls;
+      window.GLTFLoader = GLTFLoader;
+      
+      console.log('Three.js modules loaded successfully');
+      console.log('THREE:', typeof THREE);
+      console.log('OrbitControls:', typeof OrbitControls);
+      console.log('GLTFLoader:', typeof GLTFLoader);
+    </script>
+<script>
+  // Wait for modules to load
+  function waitForModules() {
+    if (typeof window.THREE !== 'undefined' && 
+        typeof window.OrbitControls !== 'undefined' && 
+        typeof window.GLTFLoader !== 'undefined') {
+      console.log('All modules loaded successfully!');
+      console.log('THREE:', typeof window.THREE);
+      console.log('OrbitControls:', typeof window.OrbitControls);
+      console.log('GLTFLoader:', typeof window.GLTFLoader);
+      
+      // Initialize the app
+      initApp();
+    } else {
+      console.log('Waiting for modules...');
+      setTimeout(waitForModules, 100);
+    }
+  }
+  
+  // Start waiting when page loads
+  window.addEventListener('load', function() {
+    setTimeout(waitForModules, 100);
+  });
+  
+  function initApp() {
+
+  // ==== OBJKT login mirror & Beacon fallback ====
+  const isEmbedded = (function(){ try{ return window.top !== window; }catch(e){ return true; } })();
+  const fromObjkt = /objkt\.com/i.test(document.referrer||'') || /objkt\.com/i.test(location.ancestorOrigins?.[0]||'');
+  let parentWallet = null; let walletAddress = null;
+
+  function askParentForWallet(timeoutMs=1400){
+    return new Promise((resolve)=>{
+      let settled=false; const t = setTimeout(()=>{ if(!settled){ settled=true; resolve(null);} }, timeoutMs);
+      function onMsg(ev){
+        if(ev?.data && ev.data.type === 'OBJKT_WALLET' && ev.data.address){
+          settled=true; clearTimeout(t); window.removeEventListener('message', onMsg);
+          resolve(ev.data.address);
+        }
+      }
+      window.addEventListener('message', onMsg);
+      try{ window.parent.postMessage({ type:'FLUXUS_REQUEST_WALLET' }, '*'); }catch(err){}
+    });
+  }
+
+  async function tryObjktSession(){
+    if(!(isEmbedded||fromObjkt)) return null;
+    const addr = await askParentForWallet();
+    if(addr){ parentWallet = addr; const artBtn=document.getElementById('artworksBtn'); if(artBtn){ artBtn.textContent='Artworks'; artBtn.disabled=false; artBtn.style.opacity='1'; } const walletBtn=document.getElementById('connectWallet'); if(walletBtn) walletBtn.style.display='none'; }
+    return parentWallet;
+  }
+
+  // ==== Scene setup ====
+  const stage = document.getElementById('stage');
+  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true, preserveDrawingBuffer:true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); stage.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100); camera.position.set(0.2, 1.5, 3.2);
+  let controls = null;
+  if (typeof window.OrbitControls !== 'undefined') {
+    controls = new window.OrbitControls(camera, renderer.domElement); 
+    controls.enableDamping = true; 
+    controls.minDistance = 1.6; 
+    controls.maxDistance = 4.5; 
+    controls.maxPolarAngle = Math.PI*0.49;
+    console.log('OrbitControls initialized successfully');
+  } else {
+    console.warn('Using basic camera controls - OrbitControls not available');
+  }
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x22334a, 0.6); scene.add(hemi);
+  const dir = new THREE.DirectionalLight(0xffffff, 1.0); dir.position.set(2,4,2); dir.castShadow=false; scene.add(dir);
+  const baseGroup = new THREE.Group(); scene.add(baseGroup);
+
+  const g = new THREE.PlaneGeometry(20,20); const m = new THREE.MeshBasicMaterial({color:0x0b0e13}); const ground = new THREE.Mesh(g,m); ground.rotation.x=-Math.PI/2; ground.position.y=-1.1; ground.renderOrder=-1; ground.visible=false; scene.add(ground);
+  
+  // Create grid texture material
+  function createGridTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    
+    // White background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 256, 256);
+    
+    // Light blue grid lines
+    ctx.strokeStyle = '#66ccff';
+    ctx.lineWidth = 1.5;
+    
+    // Draw vertical lines (more lines for smaller grid)
+    for (let i = 0; i <= 16; i++) {
+      const x = (i / 16) * 256;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, 256);
+      ctx.stroke();
+    }
+    
+    // Draw horizontal lines (more lines for smaller grid)
+    for (let i = 0; i <= 16; i++) {
+      const y = (i / 16) * 256;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(256, y);
+      ctx.stroke();
+    }
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(3, 3); // More repeats for smaller grid pattern
+    
+    return texture;
+  }
+  
+  // Create materials
+  const plainShirtMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const gridShirtMat = new THREE.MeshLambertMaterial({ 
+    color: 0xffffff,
+    map: createGridTexture()
+  });
+  
+  let isGridOn = false;
+
+  let isResizing = false;
+  function resize(){ 
+    if (isResizing) return; // Prevent multiple resize calls
+    isResizing = true;
+    const w = stage.clientWidth || window.innerWidth; 
+    const h = stage.clientHeight || (window.innerHeight - 56); 
+    renderer.setSize(w,h,false); 
+    camera.aspect=w/h; 
+    camera.updateProjectionMatrix(); 
+    setTimeout(() => { isResizing = false; }, 100); // Debounce resize calls
+  }
+  new ResizeObserver(resize).observe(stage); 
+  window.addEventListener('orientationchange',()=>setTimeout(resize,200));
+
+  // Shirt
+  let shirtMesh=null; let shirtCenter=new THREE.Vector3(); let shirtHeight=2;
+
+  async function loadShirt(){
+    if (typeof window.GLTFLoader !== 'undefined') {
+      const loader = new window.GLTFLoader();
+      try{
+        console.log('Loading 3D model...');
+        const glb = await loader.loadAsync('./objkt-3d-viewport.glb');
+        console.log('3D model loaded successfully:', glb);
+        const root = glb.scene;
+        // Store reference to the entire shirt group, not just one mesh
+        shirtMesh = root;
+        
+        // Scale the shirt to fit nicely in the frame with some space
+        shirtMesh.scale.setScalar(2.5);
+        
+        // First, let's analyze all meshes to understand the structure
+        const meshInfo = [];
+        root.traverse(o=>{ 
+          if(o.isMesh){ 
+            const box = new THREE.Box3().setFromObject(o);
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            
+            meshInfo.push({
+              name: o.name || 'unnamed',
+              center: center.clone(),
+              size: size.clone(),
+              mesh: o
+            });
+          }
+        });
+        
+        // Sort meshes by Y position to identify collar (highest) and inside parts
+        meshInfo.sort((a, b) => b.center.y - a.center.y);
+        
+        console.log('Mesh analysis:');
+        meshInfo.forEach((info, index) => {
+          console.log(`${index}: ${info.name} - Y: ${info.center.y.toFixed(2)}, Size: ${info.size.x.toFixed(2)}x${info.size.y.toFixed(2)}x${info.size.z.toFixed(2)}`);
+        });
+        
+        // Apply materials - exclude top 2-3 meshes (likely collar) and bottom meshes (likely inside)
+        const excludeTop = 2; // Exclude top 2 meshes (collar area)
+        const excludeBottom = 2; // Exclude bottom 2 meshes (inside area)
+        
+        meshInfo.forEach((info, index) => {
+          const shouldExclude = index < excludeTop || index >= meshInfo.length - excludeBottom;
+          
+          info.mesh.material = shouldExclude ? plainShirtMat : plainShirtMat; // Start with plain, will be toggled
+          info.mesh.castShadow=false; 
+          info.mesh.receiveShadow=false; 
+          info.mesh.geometry.computeBoundingSphere();
+          
+          console.log(`Applied material to mesh: ${info.name} ${shouldExclude ? '(EXCLUDED from grid)' : '(will get grid)'}`);
+        });
+        baseGroup.add(root);
+        const box = new THREE.Box3().setFromObject(root); box.getCenter(shirtCenter); const size = new THREE.Vector3(); box.getSize(size); shirtHeight = size.y || 2;
+        if (controls) controls.target.copy(shirtCenter);
+        console.log('Shirt mesh added to scene');
+        
+        // Initialize with composite texture system
+        updateShirtTexture();
+      }catch(err){
+        console.error('Failed to load 3D model:', err);
+        createFallbackShirt();
+      }
+    } else {
+      console.log('GLTFLoader not available, using sphere fallback');
+      createFallbackShirt();
+    }
+    resize();
+  }
+  
+  function createFallbackShirt() {
+    const geom = new THREE.SphereGeometry(2.5,64,64); 
+    shirtMesh = new THREE.Mesh(geom, plainShirtMat); 
+    baseGroup.add(shirtMesh); 
+    if (controls) controls.target.set(0,0,0);
+    console.log('Using sphere fallback for shirt');
+  }
+
+  // Decals (texture-based approach like grid)
+  const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
+  const decals = [];
+  const controlRingGeom = new THREE.RingGeometry(0.36, 0.38, 48);
+  const controlRingMat = new THREE.MeshBasicMaterial({ color: 0x66ccff, transparent:true, opacity:0.5, depthTest:false });
+  const controlRing = new THREE.Mesh(controlRingGeom, controlRingMat); 
+  controlRing.visible=false; // Always hidden - no manual controls
+  controlRing.renderOrder=3; 
+  scene.add(controlRing);
+
+  // Create a composite texture that combines base material with decals
+  function createCompositeTexture(baseTexture, decalTextures = []) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024; // Increased resolution for better quality
+    canvas.height = 1024;
+    const ctx = canvas.getContext('2d');
+    
+    // Enable high-quality image rendering
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    
+    // Fill with white background (shirt base)
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 1024, 1024);
+    
+    // Add grid if enabled
+    if (isGridOn) {
+      console.log('createCompositeTexture: Drawing grid');
+      ctx.strokeStyle = '#66ccff'; // Light blue grid lines
+      ctx.lineWidth = 2.0; // Slightly thicker lines for higher resolution
+      ctx.globalAlpha = 0.6; // 60% opacity - visible but not overwhelming
+      const gridSize = 32; // 32x32 grid (adjusted for 1024x1024 canvas)
+      
+      // Draw grid as squares, not just lines
+      for (let x = 0; x < 32; x++) {
+        for (let y = 0; y < 32; y++) {
+          const startX = x * gridSize;
+          const startY = y * gridSize;
+          
+          // Draw square outline
+          ctx.strokeRect(startX, startY, gridSize, gridSize);
+        }
+      }
+      
+      ctx.globalAlpha = 1.0; // Reset transparency
+      console.log('createCompositeTexture: Grid drawn');
+    } else {
+      console.log('createCompositeTexture: Grid disabled');
+    }
+    
+    // Add decals
+    decalTextures.forEach((decal, index) => {
+      if (decal.texture && decal.texture.image) {
+        const img = decal.texture.image;
+        const size = Math.min(1024 * decal.scale, 400); // Max 400px for higher resolution
+        const x = (decal.position.x + 1) * 512 - size/2; // Convert from -1,1 to 0,1024
+        const y = (decal.position.y + 1) * 512 - size/2;
+        
+        console.log(`Drawing decal ${index}: pos=(${decal.position.x.toFixed(2)}, ${decal.position.y.toFixed(2)}), size=${size.toFixed(0)}, canvas_pos=(${x.toFixed(0)}, ${y.toFixed(0)})`);
+        
+        ctx.save();
+        ctx.translate(x + size/2, y + size/2);
+        ctx.rotate(decal.rotation);
+        ctx.drawImage(img, -size/2, -size/2, size, size);
+        ctx.restore();
+      }
+    });
+    
+    console.log('createCompositeTexture: Created texture with', decalTextures.length, 'decals');
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4; // Higher anisotropy for better quality
+    texture.generateMipmaps = true;
+    texture.minFilter = THREE.LinearMipmapLinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    return texture;
+  }
+
+  function makeDecal(tex){
+    tex.colorSpace = THREE.SRGBColorSpace; 
+    tex.anisotropy = 4; // Higher anisotropy for better quality
+    tex.flipY = false;
+    tex.generateMipmaps = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    
+    const decal = {
+      texture: tex,
+      name: tex.image?.name || 'decal',
+      position: { x: 0, y: 0 }, // -1 to 1 range
+      scale: 0.3, // 0.1 to 1.0 range
+      rotation: 0
+    };
+    decals.push(decal);
+    updateShirtTexture();
+    selectLayer(decals.length-1);
+  }
+
+  function updateShirtTexture() {
+    if (!shirtMesh) return;
+    
+    // Create composite texture with decals
+    const compositeTexture = createCompositeTexture(null, decals);
+    
+    // Create new material with the composite texture
+    const compositeMaterial = new THREE.MeshLambertMaterial({ 
+      color: 0xffffff,
+      map: compositeTexture
+    });
+    
+    // Use the same mesh analysis logic as during shirt loading
+    const meshInfo = [];
+    shirtMesh.traverse((child) => {
+      if (child.isMesh) {
+        const box = new THREE.Box3().setFromObject(child);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        
+        meshInfo.push({
+          name: child.name || 'unnamed',
+          center: center.clone(),
+          mesh: child
+        });
+      }
+    });
+    
+    // Sort by Y position and exclude only collar and inside meshes
+    meshInfo.sort((a, b) => b.center.y - a.center.y);
+    
+    let appliedCount = 0;
+    meshInfo.forEach((info, index) => {
+      // Apply composite material to main shirt body parts, exclude only collar and insides
+      const isCollar = info.center.y > 3.8; // Very high Y positions are collar
+      const isInside = info.center.y < 3.1; // Very low Y positions are insides
+      
+      if (!isCollar && !isInside) {
+        // Apply composite material (includes grid + decals) to main shirt parts
+        info.mesh.material = compositeMaterial;
+        appliedCount++;
+        console.log(`Applied composite material to: ${info.name} (Y: ${info.center.y.toFixed(2)})`);
+      } else {
+        // Apply plain white material to excluded parts (collar and insides)
+        info.mesh.material = plainShirtMat;
+        console.log(`Applied plain white material to: ${info.name} (Y: ${info.center.y.toFixed(2)}) - ${isCollar ? 'COLLAR' : 'INSIDE'}`);
+      }
+    });
+    
+    console.log('updateShirtTexture: Applied composite material to', appliedCount, 'meshes with', decals.length, 'decals');
+  }
+
+  function placeAt(x,y){
+    if(!shirtMesh || !active()) return; 
+    mouse.x=(x/renderer.domElement.clientWidth)*2-1; 
+    mouse.y=-(y/renderer.domElement.clientHeight)*2+1; 
+    raycaster.setFromCamera(mouse,camera);
+    const hit = raycaster.intersectObject(shirtMesh,true)[0];
+    if(hit){
+      const a = active();
+      if(a){
+        // Convert 3D position to UV coordinates (improved mapping)
+        const pos = hit.point;
+        // Better mapping that accounts for shirt center and size
+        const relativeX = (pos.x - shirtCenter.x) / 1.5; // Normalize around shirt center
+        const relativeY = (pos.y - shirtCenter.y) / 1.5;
+        
+        a.position.x = Math.max(-1, Math.min(1, relativeX));
+        a.position.y = Math.max(-1, Math.min(1, relativeY));
+        updateShirtTexture();
+        
+        // Position control ring at decal position in 3D space
+        const ringPos = new THREE.Vector3(a.position.x * 2, a.position.y * 2, 0);
+        controlRing.position.copy(ringPos);
+        
+        console.log(`Placed decal at 3D: (${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}) -> UV: (${a.position.x.toFixed(2)}, ${a.position.y.toFixed(2)})`);
+      }
+    }
+  }
+
+  function active(){ return decals[activeIndex]; }
+  let activeIndex=-1; 
+  function selectLayer(i){ 
+    activeIndex=i; 
+    const a=active(); 
+    // Always keep control ring hidden - no manual controls
+    controlRing.visible=false; 
+  }
+
+
+  // Pointer/touch controls - drag & drop movement for existing decals, no click-to-move
+  let dragging=false; let lastDist=0; let lastAngle=0; let dragStarted=false; let mouseDown=false;
+  renderer.domElement.addEventListener('pointerdown', (e)=>{ 
+    mouseDown = true;
+    dragStarted = false;
+    dragging = false;
+  });
+  renderer.domElement.addEventListener('pointermove', (e)=>{ 
+    // Only start dragging if we have decals, mouse button is pressed, and we've moved enough
+    if(decals.length > 0 && mouseDown && e.buttons > 0 && !dragStarted) {
+      // Check if we're moving over a decal area (rough check based on mouse position)
+      const rect = renderer.domElement.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      // Convert to normalized device coordinates
+      mouse.x = (mouseX / rect.width) * 2 - 1;
+      mouse.y = -(mouseY / rect.height) * 2 + 1;
+      
+      // Raycast to see if we're over the shirt
+      raycaster.setFromCamera(mouse, camera);
+      const hit = raycaster.intersectObject(shirtMesh, true)[0];
+      
+      if(hit) {
+        // Check if we're actually over an existing decal by checking if we're near any decal position
+        let closestDecal = null;
+        let closestDistance = Infinity;
+        
+        // Find the closest decal to the hit point
+        for(let i = 0; i < decals.length; i++) {
+          const decal = decals[i];
+          const decalUV = new THREE.Vector2(decal.position.x, decal.position.y);
+          // Convert hit UV from 0-1 range to -1 to 1 range to match decal coordinates
+          const hitUV = new THREE.Vector2(hit.uv.x * 2 - 1, hit.uv.y * 2 - 1);
+          const distance = decalUV.distanceTo(hitUV);
+          
+          console.log(`Decal ${i}: pos=(${decal.position.x.toFixed(2)}, ${decal.position.y.toFixed(2)}), hit=(${hitUV.x.toFixed(2)}, ${hitUV.y.toFixed(2)}), distance=${distance.toFixed(3)}`);
+          
+          if(distance < closestDistance) {
+            closestDistance = distance;
+            closestDecal = decal;
+          }
+        }
+        
+        // Only start dragging if we're close to a decal (within a reasonable distance)
+        if(closestDecal && closestDistance < 0.2) { // Increased distance for easier dragging
+          // Select the closest decal
+          activeIndex = decals.indexOf(closestDecal);
+          dragStarted = true;
+          dragging = true;
+          
+          console.log(`Starting drag for decal ${activeIndex}, distance: ${closestDistance.toFixed(3)}`);
+          
+          // Disable camera controls when actually dragging
+          if(controls) {
+            controls.enabled = false;
+          }
+        }
+      }
+    }
+    
+    if(dragging && active()){ 
+      placeAt(e.offsetX,e.offsetY); 
+      const a=active(); 
+      if(a){ 
+        // Keep control ring hidden but update position for visual feedback
+        const ringPos = new THREE.Vector3(a.position.x * 2, a.position.y * 2, 0);
+        controlRing.position.copy(ringPos);
+        controlRing.scale.setScalar(a.scale * 2);
+      } 
+    }
+    
+    // If we're not dragging a decal, make sure camera controls are enabled
+    if(!dragging && controls) {
+      controls.enabled = true;
+    }
+  });
+  renderer.domElement.addEventListener('pointerup', (e)=>{ 
+    mouseDown = false;
+    dragging=false; 
+    dragStarted = false;
+    // Re-enable camera controls when done dragging
+    if(controls) {
+      controls.enabled = true;
+    }
+  });
+  // Disable wheel scaling - only drag & drop for placement
+  // renderer.domElement.addEventListener('wheel', (e)=>{ 
+  //   const a=active(); 
+  //   if(!a) return; 
+  //   const s=a.scale * (e.deltaY<0 ? 1.05 : 0.95); 
+  //   a.scale = Math.max(0.1, Math.min(1.0, s));
+  //   updateShirtTexture();
+  //   controlRing.scale.setScalar(a.scale * 2);
+  // });
+
+  // Disable touch controls - only drag & drop for placement
+  // renderer.domElement.addEventListener('touchmove', (e)=>{
+  //   if(e.touches.length===2){ 
+  //     e.preventDefault(); 
+  //     const a=active(); 
+  //     if(!a) return; 
+  //     const [t0,t1]=[e.touches[0], e.touches[1]]; 
+  //     const dx=t0.clientX-t1.clientX, dy=t0.clientY-t1.clientY; 
+  //     const dist=Math.hypot(dx,dy); 
+  //     const angle=Math.atan2(dy,dx); 
+  //     if(lastDist){ 
+  //       const scale=dist/lastDist; 
+  //       const s=a.scale*scale; 
+  //       a.scale = Math.max(0.1, Math.min(1.0, s));
+  //       updateShirtTexture();
+  //       controlRing.scale.setScalar(a.scale * 2);
+  //     } 
+  //     if(lastAngle){ 
+  //       const da=angle-lastAngle; 
+  //       a.rotation += da; 
+  //       updateShirtTexture();
+  //     } 
+  //     lastDist=dist; 
+  //     lastAngle=angle; 
+  //   }
+  // }, {passive:false});
+  // renderer.domElement.addEventListener('touchend', ()=>{ lastDist=0; lastAngle=0; });
+
+  // UI
+  document.getElementById('resetBtn').onclick = ()=>{ 
+    decals.length=0; 
+    controlRing.visible=false; 
+    activeIndex = -1;
+    updateShirtTexture();
+  };
+  document.getElementById('toggleGrid').onclick = ()=>{ 
+    if (shirtMesh) {
+      isGridOn = !isGridOn;
+      updateShirtTexture(); // This will handle both grid and decals
+      document.getElementById('toggleGrid').textContent = isGridOn ? 'Grid ON' : 'Grid';
+      console.log('Grid toggled:', isGridOn ? 'ON' : 'OFF');
+    }
+  };
+
+  const fileInput = document.getElementById('fileInput');
+  document.getElementById('addDecalBtn').onclick = async ()=>{ const f=fileInput.files?.[0]; if(!f) return alert('Pick an image first'); const url=URL.createObjectURL(f); const img=new Image(); img.crossOrigin='anonymous'; img.name=f.name; await new Promise(r=>{ img.onload=r; img.src=url; }); const tex=new THREE.Texture(img); tex.needsUpdate=true; tex.image.name=f.name; makeDecal(tex); };
+
+
+  // NFT fetch helpers (TZKT)
+  const walletStatus = document.getElementById('walletStatus');
+  const nftGrid = document.getElementById('nftGrid');
+  const nftCollapse = document.getElementById('nftCollapse');
+  const nftSection = document.getElementById('nftSection');
+
+  function ipfsToHttp(uri){ if(!uri) return null; return uri.replace(/^ipfs:\/\//,'https://ipfs.io/ipfs/').replace(/^ipfs\/[\/]/,'https://ipfs.io/ipfs/'); }
+
+  async function fetchNFTs(address, limit = 20, offset = 0){
+    const url = `https://api.tzkt.io/v1/tokens/balances?account=${address}&token.standard=fa2&balance.ne=0&limit=${limit}&offset=${offset}&select=token.metadata`;
+    const res = await fetch(url); const data = await res.json(); const pics=[];
+    for(const m of data){ const a=m?.artifactUri||m?.displayUri||m?.thumbnailUri; if(a){ pics.push({ src: ipfsToHttp(a), name: m?.name||'NFT' }); } }
+    return pics;
+  }
+
+  let currentOffset = 0;
+  let isLoadingMore = false;
+
+  async function loadNFTBatch(address, offset = 0, isInitial = false) {
+    try {
+      const pics = await fetchNFTs(address, 20, offset);
+      
+      if (isInitial) {
+        nftGrid.innerHTML = '<div class="small" style="text-align:center;padding:20px;">Loading images…<br><div style="margin-top:10px;font-size:10px;color:#666;">' + pics.length + ' NFTs found</div></div>';
+      }
+      
+      // Load images with better error handling and loading states
+      const imagePromises = pics.map(async (p, index) => {
+        const img = document.createElement('img');
+        img.alt = p.name;
+        img.draggable = true;
+        img.style.width = '100%';
+        img.style.borderRadius = '8px';
+        img.style.background = '#0b1320';
+        img.style.objectFit = 'cover';
+        img.style.minHeight = '80px';
+        img.title = 'Drag onto shirt';
+        img.style.opacity = '0.5'; // Start with low opacity
+        
+        // Add loading placeholder
+        img.style.background = 'linear-gradient(45deg, #222 25%, transparent 25%), linear-gradient(-45deg, #222 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #222 75%), linear-gradient(-45deg, transparent 75%, #222 75%)';
+        img.style.backgroundSize = '20px 20px';
+        img.style.backgroundPosition = '0 0, 0 10px, 10px -10px, -10px 0px';
+        
+        img.addEventListener('dragstart', (ev) => { 
+          ev.dataTransfer.setData('text/uri-list', p.src); 
+        });
+        
+        // Load image with error handling
+        return new Promise((resolve) => {
+          img.onload = () => {
+            img.style.opacity = '1';
+            img.style.background = '#0b1320';
+            resolve(img);
+          };
+          img.onerror = () => {
+            img.style.opacity = '0.3';
+            img.style.background = '#333';
+            img.alt = 'Failed to load: ' + p.name;
+            resolve(img);
+          };
+          img.src = p.src;
+        });
+      });
+      
+      // Wait for all images to load
+      const loadedImages = await Promise.all(imagePromises);
+      
+      if (isInitial) {
+        // Clear loading and add images
+        nftGrid.innerHTML = '';
+        loadedImages.forEach(img => nftGrid.appendChild(img));
+        
+        // Add Load More button if we got a full batch
+        if (pics.length === 20) {
+          addLoadMoreButton(address);
+        }
+      } else {
+        // Append new images
+        loadedImages.forEach(img => nftGrid.appendChild(img));
+        
+        // Update or remove Load More button
+        if (pics.length === 20) {
+          updateLoadMoreButton(address);
+        } else {
+          removeLoadMoreButton();
+        }
+      }
+      
+      return pics.length;
+    } catch (error) {
+      console.error('Error loading NFTs:', error);
+      if (isInitial) {
+        nftGrid.innerHTML = '<div class="small" style="text-align:center;padding:20px;color:#ff6666;">Error loading NFTs<br><div style="margin-top:10px;font-size:10px;">' + error.message + '</div></div>';
+      }
+      return 0;
+    }
+  }
+
+  function addLoadMoreButton(address) {
+    const loadMoreBtn = document.createElement('button');
+    loadMoreBtn.id = 'loadMoreBtn';
+    loadMoreBtn.textContent = 'Load More NFTs';
+    loadMoreBtn.style.cssText = 'width:100%;margin-top:8px;padding:8px;background:#1a1a1a;border:1px solid #333;color:#fff;border-radius:6px;cursor:pointer;font-size:12px;';
+    loadMoreBtn.onclick = () => loadMoreNFTs(address);
+    nftGrid.appendChild(loadMoreBtn);
+  }
+
+  function updateLoadMoreButton(address) {
+    const btn = document.getElementById('loadMoreBtn');
+    if (btn) {
+      btn.onclick = () => loadMoreNFTs(address);
+    }
+  }
+
+  function removeLoadMoreButton() {
+    const btn = document.getElementById('loadMoreBtn');
+    if (btn) btn.remove();
+  }
+
+  async function loadMoreNFTs(address) {
+    if (isLoadingMore) return;
+    isLoadingMore = true;
+    
+    const btn = document.getElementById('loadMoreBtn');
+    if (btn) {
+      btn.textContent = 'Loading...';
+      btn.disabled = true;
+    }
+    
+    currentOffset += 20;
+    const loaded = await loadNFTBatch(address, currentOffset, false);
+    
+    isLoadingMore = false;
+    if (btn) {
+      btn.textContent = 'Load More NFTs';
+      btn.disabled = false;
+    }
+  }
+
+  async function openArtworks(address){
+    if(nftCollapse && !nftCollapse.classList.contains('open')){ nftCollapse.classList.add('open'); }
+    if(nftSection){ nftSection.scrollIntoView({ behavior:'smooth', block:'start' }); }
+    walletStatus.textContent = address || walletStatus.textContent;
+    if(nftGrid.dataset.loadedFor === address) return;
+    
+    // Reset pagination
+    currentOffset = 0;
+    isLoadingMore = false;
+    
+    // Show loading with progress
+    nftGrid.innerHTML = '<div class="small" style="text-align:center;padding:20px;">Loading artworks…<br><div style="margin-top:10px;font-size:10px;color:#666;">Fetching NFT data...</div></div>';
+    
+    // Load first batch
+    await loadNFTBatch(address, 0, true);
+    nftGrid.dataset.loadedFor = address;
+  }
+
+  // Beacon fallback connect
+  document.getElementById('connectWallet').onclick = async ()=>{
+    walletStatus.textContent = 'Connecting…';
+    try{
+      // Try multiple Beacon SDK versions and methods
+      let DAppClient = null;
+      let method = '';
+      
+      // Method 1: Try proper Beacon SDK implementation with correct network
+      try {
+        console.log('Trying Method 1: proper Beacon SDK...');
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://unpkg.com/@airgap/beacon-sdk@3.2.0/dist/walletbeacon.min.js';
+          script.onload = async () => {
+            try {
+              // Wait for the script to initialize
+              await new Promise(r => setTimeout(r, 200));
+              console.log('Script loaded, checking global objects...');
+              console.log('window.beacon:', window.beacon);
+              console.log('Available beacon exports:', Object.keys(window.beacon || {}));
+              
+              // Try different ways to access DAppClient
+              DAppClient = window.beacon?.DAppClient || window.beacon?.default?.DAppClient || window.DAppClient;
+              
+              if (DAppClient) {
+                method = 'Method 1 (proper Beacon SDK)';
+                console.log('Method 1 success, DAppClient:', typeof DAppClient);
+                
+                // Initialize with proper configuration
+                const bc = new DAppClient({ 
+                  name: 'Fluxus FC',
+                  preferredNetwork: 'ghostnet' // Use testnet instead of mainnet
+                });
+                
+                // Request permissions with proper network configuration
+                const perms = await bc.requestPermissions({ 
+                  network: { 
+                    type: 'ghostnet' // Use testnet
+                  } 
+                });
+                
+                walletAddress = perms.address; 
+                walletStatus.textContent = walletAddress;
+                await openArtworks(walletAddress);
+                resolve();
+              } else {
+                console.log('DAppClient not found, trying alternative approach...');
+                // Try to access it through different paths
+                if (window.beacon && window.beacon.default) {
+                  DAppClient = window.beacon.default.DAppClient;
+                  if (DAppClient) {
+                    method = 'Method 1 (alternative path)';
+                    console.log('Method 1 success via alternative path, DAppClient:', typeof DAppClient);
+                    const bc = new DAppClient({ 
+                      name: 'Fluxus FC',
+                      preferredNetwork: 'ghostnet'
+                    });
+                    const perms = await bc.requestPermissions({ 
+                      network: { type: 'ghostnet' } 
+                    });
+                    walletAddress = perms.address; 
+                    walletStatus.textContent = walletAddress;
+                    await openArtworks(walletAddress);
+                    resolve();
+                  }
+                }
+                reject(new Error('DAppClient not found in any path'));
+              }
+            } catch (err) {
+              console.error('Beacon SDK error:', err);
+              reject(err);
+            }
+          };
+          script.onerror = () => reject(new Error('Script failed to load'));
+          document.head.appendChild(script);
+        });
+      } catch (e1) {
+        console.log('Method 1 failed:', e1.message);
+        
+        // Method 2: Try older stable version
+        try {
+          console.log('Trying Method 2: older stable version...');
+          const mod2 = await import('https://unpkg.com/@airgap/beacon-sdk@3.2.0/dist/walletbeacon.min.js');
+          DAppClient = mod2.DAppClient || mod2.default?.DAppClient || mod2.beacon?.DAppClient;
+          method = 'Method 2 (older stable)';
+          console.log('Method 2 success, DAppClient:', typeof DAppClient);
+        } catch (e2) {
+          console.log('Method 2 failed:', e2.message);
+          
+          // Method 3: Try script tag with older version
+          try {
+            console.log('Trying Method 3: script tag older version...');
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/@airgap/beacon-sdk@3.2.0/dist/walletbeacon.min.js';
+            document.head.appendChild(script);
+            await new Promise((resolve, reject) => {
+              script.onload = resolve;
+              script.onerror = reject;
+            });
+            DAppClient = window.beacon?.DAppClient || window.DAppClient;
+            method = 'Method 3 (script tag older)';
+            console.log('Method 3 success, DAppClient:', typeof DAppClient);
+          } catch (e3) {
+            console.log('Method 3 failed:', e3.message);
+            
+            // Method 4: Try direct CDN with different path
+            try {
+              console.log('Trying Method 4: direct CDN...');
+              const mod4 = await import('https://unpkg.com/@airgap/beacon-sdk@4.0.9/dist/index.js');
+              DAppClient = mod4.DAppClient || mod4.default?.DAppClient;
+              method = 'Method 4 (direct CDN)';
+              console.log('Method 4 success, DAppClient:', typeof DAppClient);
+            } catch (e4) {
+              console.log('Method 4 failed:', e4.message);
+              
+              // Method 5: Try a completely different approach with script tag and global
+              try {
+                console.log('Trying Method 5: script tag with global...');
+                return new Promise((resolve, reject) => {
+                  const script = document.createElement('script');
+                  script.src = 'https://unpkg.com/@airgap/beacon-sdk@3.2.0/dist/walletbeacon.min.js';
+                  script.onload = async () => {
+                    try {
+                      // Wait a bit for the script to initialize
+                      await new Promise(r => setTimeout(r, 100));
+                      console.log('Global beacon object:', window.beacon);
+                      console.log('Global DAppClient:', window.DAppClient);
+                      DAppClient = window.beacon?.DAppClient || window.DAppClient;
+                      if (DAppClient) {
+                        method = 'Method 5 (script global)';
+                        console.log('Method 5 success, DAppClient:', typeof DAppClient);
+                        const bc = new DAppClient({ name: 'Fluxus FC' });
+                        const perms = await bc.requestPermissions({ network: { type: 'mainnet' } });
+                        walletAddress = perms.address; 
+                        walletStatus.textContent = walletAddress;
+                        await openArtworks(walletAddress);
+                        resolve();
+                      } else {
+                        reject(new Error('DAppClient not found in global scope'));
+                      }
+                    } catch (err) {
+                      reject(err);
+                    }
+                  };
+                  script.onerror = () => reject(new Error('Script failed to load'));
+                  document.head.appendChild(script);
+                });
+              } catch (e5) {
+                console.log('Method 5 failed:', e5.message);
+                
+                // Method 6: Try a different CDN that's known to work
+                try {
+                  console.log('Trying Method 6: alternative CDN...');
+                  const script = document.createElement('script');
+                  script.src = 'https://cdn.jsdelivr.net/npm/@airgap/beacon-sdk@3.2.0/dist/walletbeacon.min.js';
+                  document.head.appendChild(script);
+                  await new Promise((resolve, reject) => {
+                    script.onload = resolve;
+                    script.onerror = reject;
+                  });
+                  await new Promise(r => setTimeout(r, 200));
+                  DAppClient = window.beacon?.DAppClient || window.DAppClient;
+                  method = 'Method 6 (alternative CDN)';
+                  console.log('Method 6 success, DAppClient:', typeof DAppClient);
+                } catch (e6) {
+                  console.log('Method 6 failed:', e6.message);
+                  throw new Error('All Beacon SDK import methods failed');
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      if (!DAppClient) {
+        throw new Error('DAppClient not found in any import method');
+      }
+      
+      console.log('Using DAppClient from:', method);
+      const bc = new DAppClient({ name: 'Fluxus FC' });
+      const perms = await bc.requestPermissions({ network: { type: 'mainnet' } });
+      walletAddress = perms.address; 
+      walletStatus.textContent = walletAddress;
+      await openArtworks(walletAddress);
+    }catch(err){ 
+      console.warn('Wallet connect failed or blocked', err); 
+      walletStatus.textContent = 'Could not connect: ' + err.message; 
+    }
+  };
+
+
+  // Drag-drop from thumbnails or links
+  renderer.domElement.addEventListener('dragover', (e)=>{ e.preventDefault(); });
+  renderer.domElement.addEventListener('drop', async (e)=>{ e.preventDefault(); const url=e.dataTransfer.getData('text/uri-list'); if(!url) return; const img=new Image(); img.crossOrigin='anonymous'; await new Promise(r=>{ img.onload=r; img.src=url; }); const tex=new THREE.Texture(img); tex.needsUpdate=true; tex.image.name=url.split('/').pop(); makeDecal(tex); });
+
+  // Artworks button logic
+  const artBtn = document.getElementById('artworksBtn');
+  if(artBtn){ artBtn.onclick = async ()=>{ if(parentWallet){ walletAddress = parentWallet; await openArtworks(walletAddress); return; } try{ window.parent.postMessage({ type:'FLUXUS_OPEN_LOGIN' }, '*'); }catch(e){} const cb=document.getElementById('connectWallet'); if(cb) cb.click(); }; }
+
+    // Boot
+    function tick(){ 
+      if (controls) controls.update(); 
+      renderer.render(scene,camera); 
+      requestAnimationFrame(tick); 
+    }
+    resize(); 
+    console.log('Starting app...');
+    console.log('Scene children:', scene.children.length);
+    loadShirt().then(() => {
+      console.log('Shirt loading completed');
+      console.log('Scene children after load:', scene.children.length);
+      console.log('BaseGroup children:', baseGroup.children.length);
+      console.log('ShirtMesh:', shirtMesh);
+    });
+    tryObjktSession().then((addr)=>{ if(addr){ walletAddress = addr; walletStatus.textContent = walletAddress; /* waiting for Artworks click to fetch */ } });
+    tick();
+  }
+</script>
+</body>
+</html>

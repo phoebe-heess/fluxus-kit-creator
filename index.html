@@ -422,11 +422,8 @@
 
   function makeDecal(tex){
     tex.colorSpace = THREE.SRGBColorSpace; 
-    tex.anisotropy = 4; // Higher anisotropy for better quality
+    tex.anisotropy = 2; 
     tex.flipY = false;
-    tex.generateMipmaps = true;
-    tex.minFilter = THREE.LinearMipmapLinearFilter;
-    tex.magFilter = THREE.LinearFilter;
     
     const decal = {
       texture: tex,
@@ -442,15 +439,6 @@
 
   function updateShirtTexture() {
     if (!shirtMesh) return;
-    
-    // Create composite texture with decals
-    const compositeTexture = createCompositeTexture(null, decals);
-    
-    // Create new material with the composite texture
-    const compositeMaterial = new THREE.MeshLambertMaterial({ 
-      color: 0xffffff,
-      map: compositeTexture
-    });
     
     // Use the same mesh analysis logic as during shirt loading
     const meshInfo = [];
@@ -473,15 +461,15 @@
     
     let appliedCount = 0;
     meshInfo.forEach((info, index) => {
-      // Apply composite material to main shirt body parts, exclude only collar and insides
+      // Apply grid to main shirt body parts, exclude only collar and insides
       const isCollar = info.center.y > 3.8; // Very high Y positions are collar
       const isInside = info.center.y < 3.1; // Very low Y positions are insides
       
       if (!isCollar && !isInside) {
-        // Apply composite material (includes grid + decals) to main shirt parts
-        info.mesh.material = compositeMaterial;
+        // Apply grid material to main shirt body (front/back)
+        info.mesh.material = isGridOn ? gridShirtMat : plainShirtMat;
         appliedCount++;
-        console.log(`Applied composite material to: ${info.name} (Y: ${info.center.y.toFixed(2)})`);
+        console.log(`Applied ${isGridOn ? 'grid' : 'plain'} material to: ${info.name} (Y: ${info.center.y.toFixed(2)})`);
       } else {
         // Apply plain white material to excluded parts (collar and insides)
         info.mesh.material = plainShirtMat;
@@ -489,7 +477,7 @@
       }
     });
     
-    console.log('updateShirtTexture: Applied composite material to', appliedCount, 'meshes with', decals.length, 'decals');
+    console.log('updateShirtTexture: Applied material to', appliedCount, 'meshes');
   }
 
   function placeAt(x,y){
